@@ -1,0 +1,31 @@
+# Dependencias (se reinstalan con composer/npm, no hace falta versionarlas)
+/vendor
+/node_modules
+
+# Assets compilados (se regeneran con npm run build)
+/public/build
+/public/hot
+
+# Configuración con datos sensibles -- NUNCA subir esto
+.env
+.env.backup
+.env.production
+
+# Archivos de Laravel que se generan solos
+/storage/*.key
+/storage/pail
+/bootstrap/cache/*.php
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*.log
+
+# Respaldos de base de datos -- pesan mucho y tienen datos reales, van aparte
+*.dump
+*.sql
+
+# IDE / sistema
+.idea
+.vscode
+.DS_Store
+Thumbs.db
