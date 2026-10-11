@@ -99,23 +99,14 @@ class BillOfLadingController extends Controller
                 ->showBackground()
                 ->save($tempPath);
         } else {
-            // Encabezado repetido en cada página (para cuando la mercancía ocupa más de una hoja):
-            // usa el mecanismo nativo de Chromium/Puppeteer, no depende de que la tabla HTML "se corte bonito".
-            $headerHtml = view('pdf.bill-of-lading-header', [
-                'bl_number' => $billOfLading->bl_number,
-                'shipper_short' => \Illuminate\Support\Str::limit(explode("\n", $billOfLading->shipper ?? '')[0], 40),
-                'consignee_short' => \Illuminate\Support\Str::limit(explode("\n", $billOfLading->consignee ?? '')[0], 40),
-            ])->render();
-
+            // Formato Trade & Business: hoja 215.14 x 280 mm, sin margen externo. Las páginas de
+            // continuación, la marca de agua "ORIGINAL" y los encabezados viven dentro del propio HTML.
             Browsershot::html($html)
                 ->setChromePath('/usr/bin/chromium')
                 ->noSandbox()
-                ->format('A4')
-                ->margins(20, 9, 12, 9)
+                ->paperSize(215.14, 280, 'mm')
+                ->margins(0, 0, 0, 0)
                 ->showBackground()
-                ->showBrowserHeaderAndFooter()
-                ->headerHtml($headerHtml)
-                ->footerHtml('<div></div>')
                 ->save($tempPath);
         }
 
