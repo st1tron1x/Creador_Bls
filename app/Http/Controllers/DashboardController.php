@@ -11,20 +11,27 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        $company = Auth::user()->activeCompany();
+        $companyId = $company->id;
+        $base = fn () => BillOfLading::where('company_id', $companyId);
+
         $counts = [
-            'borrador' => BillOfLading::where('status', 'borrador')->count(),
-            'emitido' => BillOfLading::where('status', 'emitido')->count(),
-            'anulacion_solicitada' => BillOfLading::where('status', 'anulacion_solicitada')->count(),
-            'anulado' => BillOfLading::where('status', 'anulado')->count(),
+            'borrador' => $base()->where('status', 'borrador')->count(),
+            'emitido' => $base()->where('status', 'emitido')->count(),
+            'anulacion_solicitada' => $base()->where('status', 'anulacion_solicitada')->count(),
+            'anulado' => $base()->where('status', 'anulado')->count(),
         ];
 
-        $recientes = BillOfLading::with('port')->latest()->take(5)->get();
+        $recientes = $base()->with('port')->latest()->take(5)->get();
 
-        $misBl = BillOfLading::where('created_by', Auth::id())->count();
+        $misBl = $base()->where('created_by', Auth::id())->count();
 
-        $porPuerto = Port::withCount('billsOfLading')->orderBy('name')->get();
+        // El desglose por puerto solo aplica a empresas que numeran por puerto (Trade & Business).
+        $porPuerto = $company->numbering_scheme === 'port_based'
+            ? Port::withCount(['billsOfLading' => fn ($q) => $q->where('company_id', $companyId)])->orderBy('name')->get()
+            : collect();
 
-        $emitidosEsteMes = BillOfLading::whereNotNull('issued_at')
+        $emitidosEsteMes = $base()->whereNotNull('issued_at')
             ->whereMonth('issued_at', now()->month)
             ->whereYear('issued_at', now()->year)
             ->count();
@@ -32,6 +39,7 @@ class DashboardController extends Controller
         $pendientesDeAprobar = collect();
         if (Auth::user()->can('bl.void.approve')) {
             $pendientesDeAprobar = \App\Models\BlVoidRequest::with('billOfLading', 'requestedBy')
+                ->whereHas('billOfLading', fn ($q) => $q->where('company_id', $companyId))
                 ->where('status', 'pendiente')
                 ->get()
                 ->filter(fn ($vr) => Auth::user()->canApproveVoidRequestFrom($vr->requestedBy));
@@ -39,25 +47,22 @@ class DashboardController extends Controller
 
         // --- Las 4 mejoras gerenciales ---
 
-        // 1. Top 5 shippers y consignees más frecuentes
-        $topShippers = BillOfLading::select('shipper', DB::raw('count(*) as total'))
+        $topShippers = $base()->select('shipper', DB::raw('count(*) as total'))
             ->whereNotNull('shipper')->where('shipper', '!=', '')
             ->groupBy('shipper')->orderByDesc('total')->take(5)->get();
 
-        $topConsignees = BillOfLading::select('consignee', DB::raw('count(*) as total'))
+        $topConsignees = $base()->select('consignee', DB::raw('count(*) as total'))
             ->whereNotNull('consignee')->where('consignee', '!=', '')
             ->groupBy('consignee')->orderByDesc('total')->take(5)->get();
 
-        // 2. Tiempo promedio entre creación y emisión
-        $emitidos = BillOfLading::whereNotNull('issued_at')->get(['created_at', 'issued_at']);
+        $emitidos = $base()->whereNotNull('issued_at')->get(['created_at', 'issued_at']);
         $promedioHoras = $emitidos->isNotEmpty()
             ? round($emitidos->avg(fn ($bl) => $bl->created_at->diffInHours($bl->issued_at)), 1)
             : null;
 
-        // 3. Tendencia mensual, últimos 6 meses
-        $tendenciaMensual = collect(range(5, 0))->map(function ($monthsAgo) {
+        $tendenciaMensual = collect(range(5, 0))->map(function ($monthsAgo) use ($base) {
             $date = now()->subMonths($monthsAgo);
-            $total = BillOfLading::whereNotNull('issued_at')
+            $total = $base()->whereNotNull('issued_at')
                 ->whereMonth('issued_at', $date->month)
                 ->whereYear('issued_at', $date->year)
                 ->count();
@@ -66,8 +71,7 @@ class DashboardController extends Controller
         });
         $maxTendencia = max(1, $tendenciaMensual->max('total'));
 
-        // 4. Borradores viejos (más de 3 días sin completarse)
-        $borradoresViejos = BillOfLading::with('createdBy')
+        $borradoresViejos = $base()->with('createdBy')
             ->where('status', 'borrador')
             ->where('created_at', '<=', now()->subDays(3))
             ->orderBy('created_at')

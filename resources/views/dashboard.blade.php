@@ -38,16 +38,18 @@
             </div>
         </div>
 
-        <h3>BL por puerto</h3>
-        <table style="width:100%; font-size:13px; margin-bottom:24px;">
-            @foreach ($porPuerto as $port)
-                <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td style="padding:6px 0; width:60px;"><strong>{{ $port->code }}</strong></td>
-                    <td>{{ $port->name }}</td>
-                    <td style="text-align:right; font-weight:bold;">{{ $port->bills_of_lading_count }}</td>
-                </tr>
-            @endforeach
-        </table>
+        @if ($porPuerto->isNotEmpty())
+            <h3>BL por puerto</h3>
+            <table style="width:100%; font-size:13px; margin-bottom:24px;">
+                @foreach ($porPuerto as $port)
+                    <tr style="border-bottom:1px solid #f0f0f0;">
+                        <td style="padding:6px 0; width:60px;"><strong>{{ $port->code }}</strong></td>
+                        <td>{{ $port->name }}</td>
+                        <td style="text-align:right; font-weight:bold;">{{ $port->bills_of_lading_count }}</td>
+                    </tr>
+                @endforeach
+            </table>
+        @endif
 
         @if ($borradoresViejos->isNotEmpty())
             <h3>⚠️ Borradores sin completar (+3 días)</h3>
@@ -132,7 +134,7 @@
             @foreach ($recientes as $bl)
                 <tr style="border-bottom:1px solid #f0f0f0;">
                     <td style="padding:6px 0;">{{ $bl->bl_number ?? '(borrador)' }}</td>
-                    <td>{{ $bl->port->code }}</td>
+                    <td>{{ $bl->port->code ?? $bl->port_of_loading_text ?? '—' }}</td>
                     <td>{{ ucfirst(str_replace('_', ' ', $bl->status)) }}</td>
                     <td><a href="{{ $bl->status === 'borrador' ? route('bl.create', $bl) : route('bl.show', $bl) }}">Ver &rarr;</a></td>
                 </tr>

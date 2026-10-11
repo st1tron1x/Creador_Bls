@@ -47,15 +47,20 @@
 <body>
     <header class="topbar">
         <div style="display:flex; align-items:center; gap:24px;">
-            <div class="brand">TRADE &amp; BUSINESS S.A.S. — Plataforma BL</div>
+            <div class="brand">
+                @auth
+                    {{ auth()->user()->activeCompany()->short_name ?? 'Plataforma BL' }}
+                @else
+                    Plataforma BL
+                @endauth
+            </div>
             @auth
                 <nav style="display:flex; gap:16px;">
                     <a href="{{ route('dashboard') }}" style="color:#fff; font-size:13px; text-decoration:none; opacity:.9;">Dashboard</a>
                     <a href="{{ route('bl.index') }}" style="color:#fff; font-size:13px; text-decoration:none; opacity:.9;">BL</a>
-                    @can('users.manage')
+                    <!-- @can('users.manage')
                         <a href="{{ route('users.index') }}" style="color:#fff; font-size:13px; text-decoration:none; opacity:.9;">Usuarios</a>
-                    @endcan
-                    <a href="{{ route('profile.edit') }}" style="color:#fff; font-size:13px; text-decoration:none; opacity:.9;">Mi perfil</a>
+                    @endcan -->
                 </nav>
             @endauth
         </div>
@@ -72,13 +77,26 @@
                         @endif
                     </a>
                 </div>
-                <span>{{ auth()->user()->name }}</span>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" style="background:none; border:1px solid rgba(255,255,255,.4); color:#fff; padding:5px 14px; border-radius:4px; font-size:12px; cursor:pointer;">
-                        Cerrar sesión
-                    </button>
-                </form>
+                <details style="position:relative;">
+                    <summary style="list-style:none; cursor:pointer; color:#fff; font-size:13px; display:flex; align-items:center; gap:4px;">
+                        {{ auth()->user()->name }} ▾
+                    </summary>
+                    <div style="position:absolute; right:0; top:26px; background:#fff; border-radius:6px; box-shadow:0 2px 10px rgba(0,0,0,.2); min-width:180px; z-index:50; overflow:hidden;">
+                        <a href="{{ route('profile.edit') }}" style="display:block; padding:10px 14px; color:#333; font-size:13px; text-decoration:none; border-bottom:1px solid #eee;">Mi perfil</a>
+                        @if (auth()->user()->companies()->count() > 1)
+                            <a href="{{ route('company.select') }}" style="display:block; padding:10px 14px; color:#333; font-size:13px; text-decoration:none; border-bottom:1px solid #eee;">Cambiar empresa</a>
+                        @endif
+                        @can('users.manage')
+                            <a href="{{ route('users.index') }}" style="display:block; padding:10px 14px; color:#333; font-size:13px; text-decoration:none; border-bottom:1px solid #eee;">Usuarios</a>
+                        @endcan
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; color:#c0392b; font-size:13px; cursor:pointer;">
+                                Cerrar sesión
+                            </button>
+                        </form>
+                    </div>
+                </details>
             @endauth
         </div>
     </header>

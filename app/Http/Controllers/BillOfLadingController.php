@@ -14,7 +14,9 @@ class BillOfLadingController extends Controller
 {
     public function index(Request $request)
     {
-        $query = BillOfLading::with('port')->latest();
+        $query = BillOfLading::with('port')
+            ->where('company_id', Auth::user()->activeCompany()->id)
+            ->latest();
 
         if ($request->filled('bl_number')) {
             $query->where('bl_number', 'ilike', '%' . $request->bl_number . '%');
@@ -46,6 +48,12 @@ class BillOfLadingController extends Controller
 
     public function show(BillOfLading $billOfLading)
     {
+        abort_unless(
+            Auth::user()->companies()->where('companies.id', $billOfLading->company_id)->exists(),
+            403,
+            'Este BL pertenece a otra empresa a la que no tienes acceso.'
+        );
+
         $billOfLading->load('port', 'cargoItems', 'createdBy', 'voidedBy', 'voidRequests.requestedBy', 'voidRequests.resolvedBy', 'auditLogs.user');
 
         BlAuditLog::log($billOfLading, 'visto');
@@ -54,14 +62,77 @@ class BillOfLadingController extends Controller
     }
 
     /**
-     * Genera el PDF con Browsershot a partir de la misma plantilla Blade
-     * que usamos en /dev/bl-preview, y lo descarga.
+     * Genera el PDF con Browsershot. Elige la plantilla según la empresa dueña del BL:
+     * Trade & Business (formato BUNT) o Global Trade Business Corp (formato HBL propio).
      */
     public function pdf(Request $request, BillOfLading $billOfLading)
     {
-        $billOfLading->load('port', 'cargoItems');
+        abort_unless(
+            Auth::user()->companies()->where('companies.id', $billOfLading->company_id)->exists(),
+            403,
+            'Este BL pertenece a otra empresa a la que no tienes acceso.'
+        );
 
-        $html = view('pdf.bill-of-lading', [
+        $billOfLading->load('port', 'cargoItems', 'company');
+
+        if ($billOfLading->company->pdf_template === 'global') {
+            $html = $this->renderGlobalHtml($billOfLading);
+        } else {
+            $html = $this->renderTradeHtml($billOfLading);
+        }
+
+        $fileName = $billOfLading->bl_number . '.pdf';
+        $tempPath = storage_path('app/temp/' . $fileName);
+
+        if (! is_dir(dirname($tempPath))) {
+            mkdir(dirname($tempPath), 0755, true);
+        }
+
+        if ($billOfLading->company->pdf_template === 'global') {
+            // El formato de Global ya no usa header/footer de Browsershot -- todo el
+            // documento (A4 completo) vive dentro del propio HTML, sin margen externo.
+            Browsershot::html($html)
+                ->setChromePath('/usr/bin/chromium')
+                ->noSandbox()
+                ->format('A4')
+                ->margins(0, 0, 0, 0)
+                ->showBackground()
+                ->save($tempPath);
+        } else {
+            // Encabezado repetido en cada página (para cuando la mercancía ocupa más de una hoja):
+            // usa el mecanismo nativo de Chromium/Puppeteer, no depende de que la tabla HTML "se corte bonito".
+            $headerHtml = view('pdf.bill-of-lading-header', [
+                'bl_number' => $billOfLading->bl_number,
+                'shipper_short' => \Illuminate\Support\Str::limit(explode("\n", $billOfLading->shipper ?? '')[0], 40),
+                'consignee_short' => \Illuminate\Support\Str::limit(explode("\n", $billOfLading->consignee ?? '')[0], 40),
+            ])->render();
+
+            Browsershot::html($html)
+                ->setChromePath('/usr/bin/chromium')
+                ->noSandbox()
+                ->format('A4')
+                ->margins(20, 9, 12, 9)
+                ->showBackground()
+                ->showBrowserHeaderAndFooter()
+                ->headerHtml($headerHtml)
+                ->footerHtml('<div></div>')
+                ->save($tempPath);
+        }
+
+        if ($request->boolean('download')) {
+            BlAuditLog::log($billOfLading, 'descargado');
+
+            return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+        }
+
+        BlAuditLog::log($billOfLading, 'descargado', 'previsualización en navegador');
+
+        return response()->file($tempPath, ['Content-Type' => 'application/pdf']);
+    }
+
+    protected function renderTradeHtml(BillOfLading $billOfLading): string
+    {
+        return view('pdf.bill-of-lading', [
             'bl_number' => $billOfLading->bl_number,
             'country_origin' => $billOfLading->country_origin,
             'bill_of_loading_ref' => $billOfLading->bill_of_loading_ref,
@@ -89,59 +160,46 @@ class BillOfLadingController extends Controller
             'bl_consecutive' => str_pad((string) $billOfLading->sequence_number, 4, '0', STR_PAD_LEFT),
             'cargo_items' => $billOfLading->cargoItems,
         ])->render();
+    }
 
-        $fileName = $billOfLading->bl_number . '.pdf';
-        $tempPath = storage_path('app/temp/' . $fileName);
+    protected function renderGlobalHtml(BillOfLading $billOfLading): string
+    {
+        $company = $billOfLading->company;
+        $logoPath = $company->logo_path ? public_path($company->logo_path) : null;
 
-        if (! is_dir(dirname($tempPath))) {
-            mkdir(dirname($tempPath), 0755, true);
-        }
-
-        // Encabezado repetido en cada página (para cuando la mercancía ocupa más de una hoja):
-        // usa el mecanismo nativo de Chromium/Puppeteer, no depende de que la tabla HTML "se corte bonito".
-        $headerHtml = view('pdf.bill-of-lading-header', [
+        return view('pdf.bill-of-lading-global', [
             'bl_number' => $billOfLading->bl_number,
-            'shipper_short' => \Illuminate\Support\Str::limit(explode("\n", $billOfLading->shipper ?? '')[0], 40),
-            'consignee_short' => \Illuminate\Support\Str::limit(explode("\n", $billOfLading->consignee ?? '')[0], 40),
+            'fixed_prefix' => $company->fixed_prefix,
+            'logo_path' => $logoPath,
+            'company_address' => $company->address,
+            'company_phone' => $company->phone,
+            'company_email' => $company->email,
+            'company_web' => 'www.tradebusiness.com.co',
+            'shipper' => $billOfLading->shipper,
+            'domestic_routing' => $billOfLading->domestic_routing,
+            'consignee' => $billOfLading->consignee,
+            'export_references' => $billOfLading->export_references,
+            'cargo_delivery_contact' => $billOfLading->cargo_delivery_contact,
+            'notify_party' => $billOfLading->notify_party,
+            'forwarding_agent_references' => $billOfLading->forwarding_agent_references,
+            'pre_carriage_by' => $billOfLading->pre_carriage_by,
+            'place_of_receipt' => $billOfLading->place_of_receipt,
+            'exporting_carrier' => $billOfLading->exporting_carrier,
+            'port_of_loading_text' => $billOfLading->port_of_loading_text,
+            'on_carriage_by' => $billOfLading->on_carriage_by,
+            'number_of_original_bsl' => $billOfLading->number_of_original_bsl,
+            'port_of_discharge' => $billOfLading->port_of_discharge,
+            'place_of_delivery' => $billOfLading->place_of_delivery,
+            'final_destination' => $billOfLading->final_destination,
+            'net_weight' => $billOfLading->net_weight,
+            'freight_type' => $billOfLading->freight_type,
+            'freight_total' => $billOfLading->freight_total ? number_format((float) $billOfLading->freight_total, 2) : '',
+            'freight_and_charges' => $billOfLading->freight_and_charges,
+            'excess_value_declaration' => $billOfLading->excess_value_declaration,
+            'total_charges' => $billOfLading->total_charges ? number_format((float) $billOfLading->total_charges, 2) : '',
+            'on_board_date' => optional($billOfLading->on_board_date)->format('d-M-Y'),
+            'cargo_items' => $billOfLading->cargoItems,
         ])->render();
-
-        //Browsershot::html($html)
-        //    ->setChromePath('/usr/bin/chromium')
-        //    ->noSandbox()
-        //    ->format('A4')
-        //    ->margins(20, 9, 12, 9) // margen superior más amplio para dejar espacio al encabezado repetido
-        //    ->showBackground()
-        //    ->showBrowserHeaderAndFooter()
-        //    ->headerHtml($headerHtml)
-        //    ->footerHtml('<div></div>') // sin pie de página por ahora
-        //    ->save($tempPath);
-        Browsershot::html($html)
-            ->setChromePath('/usr/bin/chromium')
-            ->noSandbox()
-            // El BUNT NO es A4: 215.14 x 280 mm.
-            ->paperSize(215.14, 280, 'mm')
-            // El Blade ya controla toda la geometría; no agregar márgenes externos.
-            ->margins(0, 0, 0, 0, 'mm')
-            ->showBackground()
-            // IMPORTANTE: no usar showBrowserHeaderAndFooter().
-            // El encabezado anterior introducía 20 mm arriba y desplazaba toda la plantilla.
-            ->save($tempPath);
-
-        // ?download=1 fuerza la descarga; sin ese parámetro, se abre en el visor del navegador (previsualización)
-        if ($request->boolean('download')) {
-            return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
-        }
-
-        // ?download=1 fuerza la descarga; sin ese parámetro, se abre en el visor del navegador (previsualización)
-        if ($request->boolean('download')) {
-            BlAuditLog::log($billOfLading, 'descargado');
-
-            return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
-        }
-
-        BlAuditLog::log($billOfLading, 'descargado', 'previsualización en navegador');
-
-        return response()->file($tempPath, ['Content-Type' => 'application/pdf']);
     }
 
     /**
@@ -166,11 +224,10 @@ class BillOfLadingController extends Controller
             'status' => 'pendiente',
         ]);
 
-        $billOfLading->status = 'anulacion_solicitada'; // asignación directa: 'status' no está en $fillable a propósito
+        $billOfLading->status = 'anulacion_solicitada';
         $billOfLading->save();
         BlAuditLog::log($billOfLading, 'anulacion_solicitada', $validated['reason']);
 
-        // Caso especial: si quien solicita ya es admin, no existe nadie de rango superior -> autoaprobación.
         if (Auth::user()->hasRole('admin')) {
             $this->resolveVoidRequest($voidRequest, Auth::user(), true, 'Autoaprobado (solicitante es admin, máximo rango).');
 
@@ -178,7 +235,6 @@ class BillOfLadingController extends Controller
                 ->with('success', "BL {$billOfLading->bl_number} anulado (autoaprobado, el solicitante ya es admin).");
         }
 
-        // Notificar a todos los que puedan aprobar esta solicitud (rango suficiente, personas distintas al solicitante).
         $requester = Auth::user();
         \App\Models\User::where('is_active', true)
             ->where('id', '!=', $requester->id)
@@ -217,10 +273,6 @@ class BillOfLadingController extends Controller
             ->with('success', $approve ? 'Anulación aprobada.' : 'Solicitud de anulación rechazada.');
     }
 
-    /**
-     * Lógica compartida para aplicar la resolución (usada tanto por el flujo normal
-     * como por la autoaprobación cuando el solicitante es admin).
-     */
     protected function resolveVoidRequest(BlVoidRequest $voidRequest, $approver, bool $approve, ?string $note = null)
     {
         $voidRequest->update([
@@ -236,13 +288,11 @@ class BillOfLadingController extends Controller
             $billOfLading->finalizeVoid($approver, $voidRequest->requested_reason);
             BlAuditLog::log($billOfLading, 'anulacion_aprobada', $note);
         } else {
-            $billOfLading->status = 'emitido'; // asignación directa: idem, 'status' no es masivo-asignable
+            $billOfLading->status = 'emitido';
             $billOfLading->save();
             BlAuditLog::log($billOfLading, 'anulacion_rechazada', $note);
         }
 
-        // Avisar a quien solicitó, sin importar si fue aprobada o rechazada -- y sin importar
-        // si el propio solicitante era admin (autoaprobación), para que quede el registro igual.
         $voidRequest->requestedBy->notify(new \App\Notifications\VoidRequestResolved($voidRequest->fresh(), $approve));
 
         return $billOfLading;

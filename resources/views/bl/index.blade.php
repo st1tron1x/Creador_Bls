@@ -67,7 +67,7 @@
                 @forelse ($bills as $bl)
                     <tr style="border-bottom:1px solid #f0f0f0;">
                         <td style="padding:8px 4px;">{{ $bl->bl_number ?? '(borrador)' }}</td>
-                        <td>{{ $bl->port->code }}</td>
+                        <td>{{ $bl->port?->code ?? $bl->port_of_loading_text ?? '—' }}</td>
                         <td>{{ \Illuminate\Support\Str::limit($bl->shipper, 30) }}</td>
                         <td>{{ \Illuminate\Support\Str::limit($bl->consignee, 30) }}</td>
                         <td>

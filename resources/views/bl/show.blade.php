@@ -39,12 +39,22 @@
         @endif
 
         <table style="width:100%; font-size:13px; margin-top:16px;">
-            <tr><td style="padding:5px 0; color:#666; width:180px;">Puerto</td><td>{{ $bl->port->code }} - {{ $bl->port->name }}</td></tr>
+            @if ($bl->port)
+                <tr><td style="padding:5px 0; color:#666; width:180px;">Puerto</td><td>{{ $bl->port->code }} - {{ $bl->port->name }}</td></tr>
+            @else
+                {{-- Global no usa catálogo de puertos: lo escribe libre --}}
+                <tr><td style="padding:5px 0; color:#666; width:180px;">Puerto de carga</td><td>{{ $bl->port_of_loading_text }}</td></tr>
+                <tr><td style="padding:5px 0; color:#666;">Exporting carrier</td><td>{{ $bl->exporting_carrier }}</td></tr>
+            @endif
             <tr><td style="padding:5px 0; color:#666;">Shipper</td><td style="white-space:pre-line;">{{ $bl->shipper }}</td></tr>
             <tr><td style="padding:5px 0; color:#666;">Consignee</td><td style="white-space:pre-line;">{{ $bl->consignee }}</td></tr>
             <tr><td style="padding:5px 0; color:#666;">Puerto de descarga</td><td>{{ $bl->port_of_discharge }}</td></tr>
-            <tr><td style="padding:5px 0; color:#666;">Buque / Viaje</td><td>{{ $bl->ocean_vessel_voy_no }}</td></tr>
-            <tr><td style="padding:5px 0; color:#666;">Flete</td><td>{{ ucfirst($bl->freight_type) }} — USD {{ number_format((float) $bl->freight_total, 2) }}</td></tr>
+            @if ($bl->port)
+                <tr><td style="padding:5px 0; color:#666;">Buque / Viaje</td><td>{{ $bl->ocean_vessel_voy_no }}</td></tr>
+            @else
+                <tr><td style="padding:5px 0; color:#666;">On-carriage by</td><td>{{ $bl->on_carriage_by }}</td></tr>
+            @endif
+            <tr><td style="padding:5px 0; color:#666;">Flete</td><td>{{ ucfirst($bl->freight_type) }} — USD {{ number_format((float) ($bl->freight_total ?? $bl->total_charges ?? 0), 2) }}</td></tr>
             <tr><td style="padding:5px 0; color:#666;">Creado por</td><td>{{ $bl->createdBy->name ?? '—' }} el {{ $bl->created_at->format('d/m/Y H:i') }}</td></tr>
             @if ($bl->status === 'anulado')
                 <tr><td style="padding:5px 0; color:#666;">Anulado por</td><td>{{ $bl->voidedBy->name ?? '—' }} el {{ optional($bl->voided_at)->format('d/m/Y H:i') }}</td></tr>
@@ -59,7 +69,8 @@
                     <th style="padding:6px 4px;">Marcas / Contenedor</th>
                     <th>Pkgs</th>
                     <th>Descripción</th>
-                    <th>Peso</th>
+                    <th>Peso bruto</th>
+                    <th>Peso neto</th>
                     <th>CBM</th>
                 </tr>
             </thead>
@@ -70,6 +81,7 @@
                         <td>{{ $item->no_of_pkgs }}</td>
                         <td>{{ $item->description_of_goods }}</td>
                         <td>{{ $item->gross_weight }}</td>
+                        <td>{{ $item->net_weight }}</td>
                         <td>{{ $item->measurement_cbm }}</td>
                     </tr>
                 @endforeach

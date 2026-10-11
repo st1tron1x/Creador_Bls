@@ -17,25 +17,4 @@ class Port extends Model
     {
         return $this->hasMany(BillOfLading::class);
     }
-
-    /**
-     * Reserva y devuelve el siguiente consecutivo de este puerto de forma atómica.
-     * Debe llamarse dentro de DB::transaction() por quien lo use (ver BillOfLading::issueFor()).
-     */
-    public function reserveNextSequence(): int
-    {
-        $port = self::where('id', $this->id)->lockForUpdate()->first();
-
-        $port->last_bl_number += 1;
-        $port->save();
-
-        $this->last_bl_number = $port->last_bl_number;
-
-        return $port->last_bl_number;
-    }
-
-    public function formatBlNumber(int $sequence): string
-    {
-        return $this->code . '-' . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
-    }
 }

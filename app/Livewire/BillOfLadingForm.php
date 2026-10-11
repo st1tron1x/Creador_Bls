@@ -290,6 +290,7 @@ class BillOfLadingForm extends Component
         } else {
             $bl = new BillOfLading($data);
             $bl->created_by = Auth::id(); // idem: campo de auditoría, no debe ser masivo-asignable
+            $bl->company_id = Auth::user()->activeCompany()->id; // idem: se define por la sesión, no por el formulario
             $bl->status = 'borrador';
             $bl->save();
             $this->draftId = $bl->id;

@@ -19,7 +19,7 @@ services:
       DB_PORT: 5432
       DB_DATABASE: bl_platform
       DB_USERNAME: bl_platform_user
-      DB_PASSWORD: bl_tyb   # cámbialo, y también en tu .env local
+      DB_PASSWORD: change_me   # cámbialo, y también en tu .env local
 
   db:
     image: postgres:16-alpine   # ya la tienes descargada, Docker reutiliza la imagen
@@ -28,7 +28,7 @@ services:
     environment:
       POSTGRES_DB: bl_platform
       POSTGRES_USER: bl_platform_user
-      POSTGRES_PASSWORD: bl_tyb
+      POSTGRES_PASSWORD: change_me
     ports:
       - "5433:5432"           # host:contenedor -> distinto al 5432 para no chocar con otra DB local
     volumes:

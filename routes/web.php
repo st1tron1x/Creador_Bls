@@ -12,16 +12,19 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.password');
+
+    Route::get('/select-company', [App\Http\Controllers\CompanySelectionController::class, 'index'])->name('company.select');
+    Route::post('/select-company', [App\Http\Controllers\CompanySelectionController::class, 'select'])->name('company.select.store');
 });
 
 // --- Plataforma BL ---
-Route::middleware(['auth', 'active'])->group(function () {
+Route::middleware(['auth', 'active', 'company'])->group(function () {
     Route::get('dashboard', [App\Http\Controllers\DashboardController::class, 'index'])
         ->middleware('verified')
         ->name('dashboard');
 
     Route::get('/bl', [App\Http\Controllers\BillOfLadingController::class, 'index'])->name('bl.index');
-    Route::get('/bl/create/{billOfLading?}', BillOfLadingForm::class)->name('bl.create');
+    Route::get('/bl/create/{billOfLading?}', [App\Http\Controllers\BillOfLadingCreateController::class, 'show'])->name('bl.create');
     Route::get('/bl/{billOfLading}', [App\Http\Controllers\BillOfLadingController::class, 'show'])->name('bl.show');
     Route::get('/bl/{billOfLading}/pdf', [App\Http\Controllers\BillOfLadingController::class, 'pdf'])->name('bl.pdf');
     Route::post('/bl/{billOfLading}/void-request', [App\Http\Controllers\BillOfLadingController::class, 'requestVoid'])->name('bl.void-request');

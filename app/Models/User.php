@@ -52,4 +52,27 @@ class User extends Authenticatable
 
         return $this->roleRank() >= $requester->roleRank();
     }
+
+    public function companies(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Company::class);
+    }
+
+    /**
+     * La empresa con la que el usuario está trabajando en esta sesión.
+     * Si solo pertenece a una, esa es siempre la activa (sin necesidad de elegir).
+     */
+    public function activeCompany(): ?Company
+    {
+        $companyId = session('active_company_id');
+
+        if ($companyId) {
+            $company = $this->companies()->where('companies.id', $companyId)->first();
+            if ($company) {
+                return $company;
+            }
+        }
+
+        return $this->companies()->count() === 1 ? $this->companies()->first() : null;
+    }
 }
