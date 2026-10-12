@@ -194,6 +194,51 @@ class BillOfLadingController extends Controller
     }
 
     /**
+     * Duplica un BL (de cualquier estado) como un NUEVO BORRADOR de la misma empresa.
+     * Copia remitente, consignatario, transporte, carga y flete. NO copia: número ni consecutivo
+     * (se asignan al emitir), estado, anulación/aprobaciones, auditoría, ni la fecha de embarque,
+     * la referencia de la naviera y la referencia del shipper (propias de cada embarque).
+     */
+    public function duplicate(BillOfLading $billOfLading)
+    {
+        abort_unless(Auth::user()->can('bl.create'), 403);
+
+        $company = Auth::user()->activeCompany();
+        abort_unless(
+            $billOfLading->company_id === $company->id,
+            403,
+            'Este BL pertenece a otra empresa. Cambia de empresa para duplicarlo.'
+        );
+
+        $copy = \Illuminate\Support\Facades\DB::transaction(function () use ($billOfLading) {
+            $new = new BillOfLading($billOfLading->only($billOfLading->getFillable()));
+            $new->on_board_date = null;
+            $new->bill_of_loading_ref = null;
+            $new->shipper_ref = null;
+            $new->company_id = $billOfLading->company_id; // asignación directa: no es masivo-asignable
+            $new->created_by = Auth::id();
+            $new->updated_by = Auth::id();
+            $new->status = 'borrador';
+            $new->save();
+
+            foreach ($billOfLading->cargoItems as $item) {
+                $new->cargoItems()->create($item->only([
+                    'sort_order', 'marks_and_numbers', 'container_seal_no',
+                    'no_of_pkgs', 'description_of_goods', 'gross_weight', 'measurement_cbm',
+                ]));
+            }
+
+            $origen = $billOfLading->bl_number ?: ('borrador #' . $billOfLading->id);
+            BlAuditLog::log($new, 'creado', 'Duplicado a partir del BL ' . $origen);
+
+            return $new;
+        });
+
+        return redirect()->route('bl.create', $copy)
+            ->with('success', 'Borrador creado a partir del BL ' . ($billOfLading->bl_number ?: '#' . $billOfLading->id) . '. Revisa los datos y emítelo cuando esté listo.');
+    }
+
+    /**
      * Cualquier usuario autenticado (incluido auxiliar) puede solicitar la anulación,
      * explicando el motivo. No anula nada todavía -- solo deja la solicitud pendiente.
      */

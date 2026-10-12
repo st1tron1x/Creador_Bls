@@ -95,6 +95,13 @@
                 <a href="{{ route('bl.create', $bl) }}" class="btn btn-primary">Continuar editando</a>
             @endif
 
+            @can('bl.create')
+                <form method="POST" action="{{ route('bl.duplicate', $bl) }}" onsubmit="return confirm('¿Crear un nuevo borrador con los datos de este BL? El número se asigna al emitir.');" style="display:inline;">
+                    @csrf
+                    <button type="submit" class="btn btn-secondary">Duplicar como borrador</button>
+                </form>
+            @endcan
+
             @if ($bl->status === 'emitido')
                 <a href="{{ route('bl.pdf', $bl) }}" target="_blank" class="btn btn-secondary">Ver PDF</a>
                 <a href="{{ route('bl.pdf', $bl) }}?download=1" class="btn btn-primary">Descargar PDF</a>

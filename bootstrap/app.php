@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias([ 'active' => \App\Http\Middleware\EnsureUserIsActive::class, 'company' => \App\Http\Middleware\EnsureCompanySelected::class, ]); 
+        $middleware->alias([ 'active' => \App\Http\Middleware\EnsureUserIsActive::class, 'company' => \App\Http\Middleware\EnsureCompanySelected::class, ]);
+
+        // Duración máxima absoluta de la sesión (SESSION_MAX_HOURS), además de la inactividad (SESSION_LIFETIME).
+        $middleware->appendToGroup('web', \App\Http\Middleware\EnforceSessionLimit::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

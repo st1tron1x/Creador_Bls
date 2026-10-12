@@ -27,6 +27,7 @@ Route::middleware(['auth', 'active', 'company'])->group(function () {
     Route::get('/bl/create/{billOfLading?}', [App\Http\Controllers\BillOfLadingCreateController::class, 'show'])->name('bl.create');
     Route::get('/bl/{billOfLading}', [App\Http\Controllers\BillOfLadingController::class, 'show'])->name('bl.show');
     Route::get('/bl/{billOfLading}/pdf', [App\Http\Controllers\BillOfLadingController::class, 'pdf'])->name('bl.pdf');
+    Route::post('/bl/{billOfLading}/duplicate', [App\Http\Controllers\BillOfLadingController::class, 'duplicate'])->name('bl.duplicate');
     Route::post('/bl/{billOfLading}/void-request', [App\Http\Controllers\BillOfLadingController::class, 'requestVoid'])->name('bl.void-request');
     Route::post('/void-requests/{voidRequest}/approve', [App\Http\Controllers\BillOfLadingController::class, 'approveVoid'])->name('bl.void-request.approve');
     Route::post('/void-requests/{voidRequest}/reject', [App\Http\Controllers\BillOfLadingController::class, 'rejectVoid'])->name('bl.void-request.reject');

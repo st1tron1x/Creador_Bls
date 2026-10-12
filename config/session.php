@@ -34,6 +34,9 @@ return [
 
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
 
+    // Duración máxima ABSOLUTA de una sesión, en horas (0 = sin límite). Ver EnforceSessionLimit.
+    'max_hours' => (int) env('SESSION_MAX_HOURS', 0),
+
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
     /*

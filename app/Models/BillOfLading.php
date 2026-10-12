@@ -16,7 +16,7 @@ class BillOfLading extends Model
     protected $table = 'bills_of_lading';
 
     protected $fillable = [
-        'port_id', 'port_of_loading_text', 'domestic_routing', 'export_references',
+        'port_id', 'bill_of_loading_ref', 'port_of_loading_text', 'domestic_routing', 'export_references',
         'cargo_delivery_contact', 'forwarding_agent_references', 'exporting_carrier',
         'on_carriage_by', 'net_weight', 'total_charges', 'country_origin', 'shipper_ref', 'shipper', 'consignee',
         'notify_party', 'pre_carriage_by', 'place_of_receipt', 'ocean_vessel_voy_no',
